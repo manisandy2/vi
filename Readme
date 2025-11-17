@@ -1,0 +1,59 @@
+
+conda install python=3.12.0
+
+pip install tensorflow==2.19.0
+
+pip install fastapi
+sudo apt install libzbar0
+
+
+sudo apt install libzbar-dev
+
+
+pip install pyzbar
+
+ldconfig -p | grep zbar
+
+libzbar.so.0 (libc6,x86-64) => /usr/lib/x86_64-linux-gnu/libzbar.so.0
+
+
+conda run fastapi dev veri
+
+#install
+
+mkdir -p ~/miniconda3
+wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh -O ~/miniconda3/miniconda.sh
+bash ~/miniconda3/miniconda.sh -b -u -p ~/miniconda3
+rm ~/miniconda3/miniconda.sh
+
+# activate
+source ~/miniconda3/bin/activate
+
+conda init --all
+
+## delete
+conda remove --name <ENV_NAME> --all
+
+
+## create 
+conda create --name <ENV_NAME> <PACKAGE>=<VERSION> <PACKAGE> <PACKAGE>
+
+# conda create --name vi_env python=3.12 tensorflow=2.19 
+
+conda create -n vi_env python=3.10 -y
+conda activate vi_env
+pip install tensorflow==2.19.0
+pip install "fastapi[standard]"
+pip install --upgrade pip
+pip install paddleOCR
+pip install paddlepaddle
+pip install qreader
+pip install zbar
+pip install deepface
+pip install tf-keras
+
+# export env
+conda env export > environment.yml
+
+
+conda run fastapi dev verifyidentity.py
