@@ -57,3 +57,25 @@ conda env export > environment.yml
 
 
 conda run fastapi dev verifyidentity.py
+
+
+export TF_ENABLE_ONEDNN_OPTS=0
+
+
+to enable the following instructions:AVX2 AVX512F AVX512_VNNI AVX512_BF16 AVX_VNNI FNA in other operations rebuild tensorflow with the appropriate compiler flags
+
+conda install -c conda-forge tensorflow
+
+pip uninstall -y tensorflow
+
+conda install -c conda-forge tensorflow
+
+
+export TF_CPP_MIN_LOG_LEVEL=2
+
+
+export TF_CPP_MIN_LOG_LEVEL=3
+
+sudo apt update
+sudo apt install libzbar0 libzbar-dev
+
