@@ -337,6 +337,46 @@ async def validate_id_proof(file1: UploadFile = File(..., description="Aadhaar /
         print("Error during OCR:", str(e))
         raise HTTPException(status_code=500, detail=f"OCR failed: {str(e)}")
 
+
+@app.post("/validate-aadhar")
+async def validate_id_proof(file1: UploadFile = File(..., description="Aadhaar / Pancard Image")):
+    try:
+        contents = await file1.read()
+        id_image = io.BytesIO(contents)
+
+        pil_image = Image.open(id_image).convert("RGB")
+
+        # Enhance for OCR
+        gysc_image = ImageOps.grayscale(pil_image)
+        autoctrst_image = ImageOps.autocontrast(gysc_image)
+        image_np = cv2.cvtColor(np.array(autoctrst_image), cv2.COLOR_GRAY2BGR)
+
+        # OCR
+        ocr = PaddleOCR(use_textline_orientation=True, lang='en')
+        results = ocr.predict(image_np)
+
+        result_dict = results[0]
+        texts = result_dict.get("rec_texts", [])
+        scores = result_dict.get("rec_scores", [])
+
+        if not texts:
+            raise HTTPException(status_code=400, detail="OCR failed: No text detected")
+
+
+        # ----------- Final Output -----------
+        return {
+            "document_type": "AADHAAR",
+     
+            "valid": True,
+            "texts": texts,
+            "scores":scores
+        
+        }
+
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
