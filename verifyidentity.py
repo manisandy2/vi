@@ -188,149 +188,149 @@ async def validate_id_proof(file1: UploadFile = File(..., description="Aadhaar /
         texts = result_dict.get("rec_texts", [])
         scores = result_dict.get("rec_scores", [])
 
-        print(texts)
-        return texts
+        # print(texts)
+        # return texts
 
-        # if not texts:
-        #     raise HTTPException(status_code=400, detail="OCR failed: No text detected")
+        if not texts:
+            raise HTTPException(status_code=400, detail="OCR failed: No text detected")
 
-        # combined_text = " ".join(texts).upper()
-        # high_conf_texts = [
-        #     t for t, s in zip(texts, scores)
-        #     if s > 0.7 and t.isalpha() and t.isupper() and len(t) > 8
-        # ]
+        combined_text = " ".join(texts).upper()
+        high_conf_texts = [
+            t for t, s in zip(texts, scores)
+            if s > 0.7 and t.isalpha() and t.isupper() and len(t) > 8
+        ]
 
-        # document_type = "UNKNOWN"
+        document_type = "UNKNOWN"
 
-        # pan_regex = r"\b[A-Z]{5}[0-9]{4}[A-Z]\b"
-        # aadhaar_regex = r"\b\d{4}[\s-]?\d{4}[\s-]?\d{4}\b"
-        # voter_regex = r"\b[A-Z]{3}\d{7}\b"
+        pan_regex = r"\b[A-Z]{5}[0-9]{4}[A-Z]\b"
+        aadhaar_regex = r"\b\d{4}[\s-]?\d{4}[\s-]?\d{4}\b"
+        voter_regex = r"\b[A-Z]{3}\d{7}\b"
 
-        # if re.search(pan_regex, combined_text):
-        #     document_type = "PAN"
-        # elif re.search(aadhaar_regex, combined_text) or "AADHAAR" in combined_text or "UIDAI" in combined_text:
-        #     document_type = "AADHAAR"
-        #     print("Document type is Aadhaar")
-        #     #decoded_texts = qreader_instance.detect_and_decode(image=aadhaar_image,return_detections=False)
-        #     #decoded_texts = await run_in_threadpool(qreader_instance.detect_and_decode, image=image_np)
-        #      # Use pyzbar to decode the QR code
-        #     qr_codes = decode(autoctrst_image)
-        #     print(qr_codes)
-        #     return extract_aadhar(qr_codes)
-        # elif re.search(voter_regex, combined_text) or "ELECTION COMMISSION" in combined_text or "EPIC" in combined_text:
-        #     document_type = "VOTER_ID"
+        if re.search(pan_regex, combined_text):
+            document_type = "PAN"
+        elif re.search(aadhaar_regex, combined_text) or "AADHAAR" in combined_text or "UIDAI" in combined_text:
+            document_type = "AADHAAR"
+            print("Document type is Aadhaar")
+            #decoded_texts = qreader_instance.detect_and_decode(image=aadhaar_image,return_detections=False)
+            #decoded_texts = await run_in_threadpool(qreader_instance.detect_and_decode, image=image_np)
+             # Use pyzbar to decode the QR code
+            qr_codes = decode(autoctrst_image)
+            print(qr_codes)
+            return extract_aadhar(qr_codes)
+        elif re.search(voter_regex, combined_text) or "ELECTION COMMISSION" in combined_text or "EPIC" in combined_text:
+            document_type = "VOTER_ID"
 
-        # # -------------------------
-        # # Extract common fields
-        # # -------------------------
-        # name = None
-        # dob = None
-        # id_number = None
-        # gender = None  # <--- ADD THIS
+        # -------------------------
+        # Extract common fields
+        # -------------------------
+        name = None
+        dob = None
+        id_number = None
+        gender = None  # <--- ADD THIS
 
-        # if document_type == "PAN":
-        #     pan_match = re.search(r"\b([A-Z]{5}[0-9]{4}[A-Z])\b", combined_text)
-        #     id_number = pan_match.group(1) if pan_match else None
-        #     dob_match = re.search(r"\b(\d{2}/\d{2}/\d{4})\b", combined_text)
-        #     dob = dob_match.group(1) if dob_match else None
-        #     # PAN name logic
-        #     for i in range(len(texts)):
-        #         line = texts[i].strip().upper()
-        #         if "INCOMETAXDEPARTMENT" in line or "INCOME TAX" in line:
-        #             for next_line in texts[i+1:i+3]:
-        #                 if re.fullmatch(r"[A-Z\s]{6,}", next_line):
-        #                     name = next_line.strip()
-        #                     break
-        #         if name:
-        #             break
-        #     # ------------------------
-        # elif document_type == "AADHAAR":
-        #     # Try full match first
-        #     aadhaar_match = re.search(r"\b\d{4}[\s-]?\d{4}[\s-]?\d{4}\b", combined_text)
-        #     if aadhaar_match:
-        #         id_number = aadhaar_match.group(0).replace("-", " ").replace("\u200c", "").strip()
-        #     else:
-        #         # Collect all numeric chunks that are 4 to 5 digits (to catch partial splits)
-        #         numeric_chunks = [t for t in texts if re.fullmatch(r"\d{4,5}", t)]
-        #         combined = ''.join(numeric_chunks)
-        #         if len(combined) >= 12:
-        #             id_number = f"{combined[:4]} {combined[4:8]} {combined[8:12]}"
-        #         else:
-        #             id_number = None
+        if document_type == "PAN":
+            pan_match = re.search(r"\b([A-Z]{5}[0-9]{4}[A-Z])\b", combined_text)
+            id_number = pan_match.group(1) if pan_match else None
+            dob_match = re.search(r"\b(\d{2}/\d{2}/\d{4})\b", combined_text)
+            dob = dob_match.group(1) if dob_match else None
+            # PAN name logic
+            for i in range(len(texts)):
+                line = texts[i].strip().upper()
+                if "INCOMETAXDEPARTMENT" in line or "INCOME TAX" in line:
+                    for next_line in texts[i+1:i+3]:
+                        if re.fullmatch(r"[A-Z\s]{6,}", next_line):
+                            name = next_line.strip()
+                            break
+                if name:
+                    break
+            # ------------------------
+        elif document_type == "AADHAAR":
+            # Try full match first
+            aadhaar_match = re.search(r"\b\d{4}[\s-]?\d{4}[\s-]?\d{4}\b", combined_text)
+            if aadhaar_match:
+                id_number = aadhaar_match.group(0).replace("-", " ").replace("\u200c", "").strip()
+            else:
+                # Collect all numeric chunks that are 4 to 5 digits (to catch partial splits)
+                numeric_chunks = [t for t in texts if re.fullmatch(r"\d{4,5}", t)]
+                combined = ''.join(numeric_chunks)
+                if len(combined) >= 12:
+                    id_number = f"{combined[:4]} {combined[4:8]} {combined[8:12]}"
+                else:
+                    id_number = None
 
 
-        #     dob_match = re.search(r"(DOB|YOB|DATE OF BIRTH)?[:\s/]*([0-9]{2}/[0-9]{2}/[0-9]{4}|[0-9]{4})", combined_text)
-        #     dob = dob_match.group(2) if dob_match else None
-        #     # Extract gender
-        #     # ---------------------------------
-        #     gender = extract_gender(combined_text)  # Call this instead of your current logic
-        #       # 🔍 Aadhaar name extraction based on position before DOB
-        #     if dob:
-        #         for i in range(len(texts)):
-        #             if dob in texts[i]:
-        #                 for j in range(i-1, max(i-4, -1), -1):
-        #                     candidate = texts[j].strip()
-        #                     if re.fullmatch(r"[A-Za-z\s]{6,}", candidate) and "GOVERNMENT" not in candidate.upper():
-        #                         name = candidate
-        #                         break
-        #                 break
-        # elif document_type == "VOTER_ID":
-        #     voter_match = re.search(r"\b([A-Z]{3}[0-9]{7})\b", combined_text)
-        #     id_number = voter_match.group(1) if voter_match else None
-        #     dob_match = re.search(r"\b(\d{2}/\d{2}/\d{4}|\d{4})\b", combined_text)
-        #     dob = dob_match.group(1) if dob_match else None
-        #     for line in texts:
-        #         match = re.search(r"ELECTOR['’`S\s]*NAME[:\s]*(.*)", line, re.IGNORECASE)
-        #         if match:
-        #             name = match.group(1).strip()
-        #             break
+            dob_match = re.search(r"(DOB|YOB|DATE OF BIRTH)?[:\s/]*([0-9]{2}/[0-9]{2}/[0-9]{4}|[0-9]{4})", combined_text)
+            dob = dob_match.group(2) if dob_match else None
+            # Extract gender
+            # ---------------------------------
+            gender = extract_gender(combined_text)  # Call this instead of your current logic
+              # 🔍 Aadhaar name extraction based on position before DOB
+            if dob:
+                for i in range(len(texts)):
+                    if dob in texts[i]:
+                        for j in range(i-1, max(i-4, -1), -1):
+                            candidate = texts[j].strip()
+                            if re.fullmatch(r"[A-Za-z\s]{6,}", candidate) and "GOVERNMENT" not in candidate.upper():
+                                name = candidate
+                                break
+                        break
+        elif document_type == "VOTER_ID":
+            voter_match = re.search(r"\b([A-Z]{3}[0-9]{7})\b", combined_text)
+            id_number = voter_match.group(1) if voter_match else None
+            dob_match = re.search(r"\b(\d{2}/\d{2}/\d{4}|\d{4})\b", combined_text)
+            dob = dob_match.group(1) if dob_match else None
+            for line in texts:
+                match = re.search(r"ELECTOR['’`S\s]*NAME[:\s]*(.*)", line, re.IGNORECASE)
+                if match:
+                    name = match.group(1).strip()
+                    break
 
-        # # -------------------------
-        # # Extract name
-        # # -------------------------
-        # blacklist = {
-        #     "INCOMETAXDEPARTMENT", "GOVTOFINDIA", "PERMANENTACCOUNTNUMBER",
-        #     "UNIQUEIDENTIFICATIONAUTHORITY", "INDIA", "ELECTIONCOMMISSION",
-        #     "ELECTORPHOTOIDENTITYCARD", "GOVERNMENT", "GOVT"
-        # }
-        # # possible_names = [t for t in high_conf_texts if t.replace(" ", "") not in blacklist]
-        # # name = possible_names[0] if possible_names else None
-        # def is_probable_name(text):
-        #     return (
-        #         8 <= len(text) <= 30 and
-        #         text.replace(" ", "").isalpha() and
-        #         not any(word.upper() in blacklist for word in text.split())
-        #     )
+        # -------------------------
+        # Extract name
+        # -------------------------
+        blacklist = {
+            "INCOMETAXDEPARTMENT", "GOVTOFINDIA", "PERMANENTACCOUNTNUMBER",
+            "UNIQUEIDENTIFICATIONAUTHORITY", "INDIA", "ELECTIONCOMMISSION",
+            "ELECTORPHOTOIDENTITYCARD", "GOVERNMENT", "GOVT"
+        }
+        # possible_names = [t for t in high_conf_texts if t.replace(" ", "") not in blacklist]
+        # name = possible_names[0] if possible_names else None
+        def is_probable_name(text):
+            return (
+                8 <= len(text) <= 30 and
+                text.replace(" ", "").isalpha() and
+                not any(word.upper() in blacklist for word in text.split())
+            )
 
-        # if not name:
-        #     possible_names = [t for t, s in zip(texts, scores) if s > 0.7 and is_probable_name(t)]
-        #     if not possible_names:
-        #         possible_names = [t for t in texts if is_probable_name(t)]
-        #     name = possible_names[0] if possible_names else None
+        if not name:
+            possible_names = [t for t, s in zip(texts, scores) if s > 0.7 and is_probable_name(t)]
+            if not possible_names:
+                possible_names = [t for t in texts if is_probable_name(t)]
+            name = possible_names[0] if possible_names else None
 
     
-        # result = {
-        #     "document_type": document_type,
-        #     "name": name,
-        #     "dob": dob,
-        #     "gender": gender,
-        #     "valid": False
-        # }
+        result = {
+            "document_type": document_type,
+            "name": name,
+            "dob": dob,
+            "gender": gender,
+            "valid": False
+        }
 
-        # if document_type == "PAN":
-        #     result["pan_number"] = id_number
-        #     result["valid"] = bool(id_number and dob and name)
-        # elif document_type == "AADHAAR":
-        #     result["aadhaar_number"] = id_number
-        #     result["valid"] = bool(id_number and dob and name and gender)
-        # elif document_type == "VOTER_ID":
-        #     result["voter_id_number"] = id_number
-        #     result["valid"] = bool(id_number and name)
+        if document_type == "PAN":
+            result["pan_number"] = id_number
+            result["valid"] = bool(id_number and dob and name)
+        elif document_type == "AADHAAR":
+            result["aadhaar_number"] = id_number
+            result["valid"] = bool(id_number and dob and name and gender)
+        elif document_type == "VOTER_ID":
+            result["voter_id_number"] = id_number
+            result["valid"] = bool(id_number and name)
 
-        # # return result
-        # result["extracted_texts"] = texts
-        # result["extracted_text_combined"] = combined_text
         # return result
+        result["extracted_texts"] = texts
+        result["extracted_text_combined"] = combined_text
+        return result
 
 
     except Exception as e:

@@ -3,6 +3,8 @@ __pycache__/
 __MACOSX/
 images/
 verifyIdentity.zip
+*.idea/
+*.DS_Store
 
 *.py[codz]
 *$py.class

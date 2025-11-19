@@ -1,0 +1,11 @@
+# Ignore common development files and directories
+.git/
+.gitignore
+node_modules/
+dist/
+logs/
+*.log
+*.tmp
+
+# But include a specific important log file
+!logs/important.log
