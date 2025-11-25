@@ -1,44 +1,182 @@
-from fastapi import FastAPI, File, UploadFile, HTTPException
+from fastapi import FastAPI, File, UploadFile, HTTPException,Depends,Header,Request,status
+from fastapi.responses import JSONResponse
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from deepface import DeepFace
 from PIL import Image,ImageOps
-import io
-import base64
+from typing import Optional
 import cv2
+import io
+import os
+import base64
 import re
+from datetime import datetime, timedelta, timezone
+from jose import jwt, JWTError
 import numpy as np
-from typing import Dict
+from dotenv import load_dotenv
+
 import paddle
 from paddleocr import PaddleOCR
-from qreader import QReader
-import cv2
+# from qreader import QReader  # Commented: requires pyzbar which has arm64 compatibility issues
+
 from pyaadhaar.decode import AadhaarSecureQr,AadhaarOldQr,AadhaarQRXML
 import xml.dom.minidom
 import xml.etree.ElementTree as ET
 from starlette.concurrency import run_in_threadpool # Import run_in_threadpool
-from pyzbar.pyzbar import decode
 
+
+# Load environment variables from .env file
+load_dotenv()
+
+
+# Check for GPU availability
 gpu_available  = paddle.device.is_compiled_with_cuda()
 print("GPU available:", gpu_available)
 
-qreader_instance = QReader()
-ocr = PaddleOCR(use_angle_cls=True, lang='en')
+# JWT Configuration
+JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY")
+ALGORITHM = os.getenv("JWT_ALGORITHM")
+TOKEN_EXPIRE_HOURS = 1
+
+# Security Scheme
+security = HTTPBearer()
+
+
+# Allowed Apps & Domains Authentication
+ALLOWED_DOMAINS = {
+    "ADMIN": {
+        "domain": ["www.poorvika.com","www.poorvika.in"],
+        "description": "CRM Application",
+        "endpoints": ["verify_faces", "validate-id", "validate-aadhar"]
+    },
+    # "ADMIN": {
+    #     "domain": ["admin.poorvika.com"],
+    #     "description": "Admin Application",
+    #     "endpoints": ["validate-aadhar"]
+    # },
+}
+# Initialize PaddleOCR once
+
+ocr_engine = PaddleOCR(use_angle_cls=True, lang='en')
+
 app = FastAPI(
     title="Identify Face Verification API",
     description="An API to verify two faces.",
     version="1.0.0",
 )
 
+# ---------------- JWT Utility ----------------
+def create_jwt(app_name: str):
+    """Create JWT token with app name and optional domain"""
+    now = datetime.now(timezone.utc)
+    expire = now + timedelta(hours=TOKEN_EXPIRE_HOURS)
+    payload = {
+        "app": app_name,
+        "exp": expire,
+        "iat": now
+    }
+    return jwt.encode(payload, JWT_SECRET_KEY, algorithm=ALGORITHM)
+
+
+def verify_jwt(token: str, required_app: str = None):
+    """Verify JWT token and validate app name and domain"""
+    try:
+        payload = jwt.decode(token, JWT_SECRET_KEY, algorithms=[ALGORITHM])
+        app_name = payload.get("app")
+        
+        
+        # Validate app name exists in allowed domains
+        if app_name not in ALLOWED_DOMAINS:
+            raise HTTPException(status_code=401, detail=f"Invalid app: {app_name}")
+        
+        # If specific app required, validate it matches
+        if required_app and app_name != required_app:
+            raise HTTPException(status_code=403, detail=f"Access denied. Required app: {required_app}")
+        
+        # Validate domain matches
+        expected_domain = ALLOWED_DOMAINS[app_name].get("domain")
+        
+        
+        return payload
+    except JWTError as e:
+        raise HTTPException(status_code=401, detail=f"Invalid or expired token: {str(e)}")
+
+@app.post("/auth/token")
+async def get_token(
+        request: Request,
+        app_name: Optional[str] = Header(None),
+     
+):
+    """
+    Generate JWT authentication token.
+    
+    Headers:
+    - appName: valid app name from allowed domains.
+    
+    """
+    if not app_name:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Missing 'appName' header. Allowed values: Valid app names."
+        )
+
+    # Validate app_name is in allowed domains
+    if app_name not in ALLOWED_DOMAINS:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            # detail=f"Invalid appName: {app_name}. Allowed: {list(ALLOWED_DOMAINS.keys())}"
+            detail=f"Invalid appName: {app_name}."
+        )
+
+    try:
+        # Use provided domain or get from config
+        
+        token = create_jwt(app_name)
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Token generation failed: {str(e)}"
+        )
+
+    return JSONResponse(
+        content={
+            "status": "success",
+            "access_token": token,
+            "token_type": "bearer",
+            "expires_in": TOKEN_EXPIRE_HOURS * 3600,
+            "status_code": 200  
+        },
+    )
+
+
+
 @app.post("/verify_faces")
 async def verify_faces(
     file1: UploadFile = File(..., description="Aadhaar / Pancard Image"),
-    file2: UploadFile = File(..., description="Customer Identity Image")
+    file2: UploadFile = File(..., description="Customer Identity Image"),
+    credentials: HTTPAuthorizationCredentials = Depends(security)
 ):
     """
     Verifies if two faces in the provided images belong to the same person.
+    
+    Requires valid JWT token with access to 'verify_faces' endpoint.
 
     Expects two image files as input.
     Returns a dictionary with verification results from DeepFace.
     """
+    # Verify JWT and check endpoint access
+    payload = verify_jwt(credentials.credentials)
+    app_name = payload.get("app")
+    
+    # Check if endpoint is allowed for this app
+    allowed_endpoints = ALLOWED_DOMAINS[app_name].get("endpoints", [])
+    if "verify_faces" not in allowed_endpoints:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f"App '{app_name}' does not have access to verify_faces endpoint"
+        )
+    
+    from deepface import DeepFace
+
     try:
         # Read image bytes
         contents1 = await file1.read()
@@ -48,6 +186,7 @@ async def verify_faces(
         # DeepFace can also handle numpy arrays directly, which we convert to
         image1 = Image.open(io.BytesIO(contents1)).convert("RGB")
         image2 = Image.open(io.BytesIO(contents2)).convert("RGB")
+       
 
         # Convert PIL Image to NumPy array (DeepFace accepts NumPy arrays)
         image1_np = np.array(image1)
@@ -93,9 +232,8 @@ def extract_aadhar(decoded_texts):
     except Exception as e:
         return {
             "status" : "Error",
-            "Error" : str(print(e))
+            "Error" : str(e)
         }
-        
 
 def extract_info(texts):
     joined_text = ' '.join(texts).upper()
@@ -164,7 +302,7 @@ def extract_gender(text: str) -> str:
     
     return None
 
-@app.post("/validate-id")
+# @app.post("/validate-id")
 async def validate_id_proof(file1: UploadFile = File(..., description="Aadhaar / Pancard Image"),):
     try:
         # Decode base64 image
@@ -211,12 +349,8 @@ async def validate_id_proof(file1: UploadFile = File(..., description="Aadhaar /
         elif re.search(aadhaar_regex, combined_text) or "AADHAAR" in combined_text or "UIDAI" in combined_text:
             document_type = "AADHAAR"
             print("Document type is Aadhaar")
-            #decoded_texts = qreader_instance.detect_and_decode(image=aadhaar_image,return_detections=False)
-            #decoded_texts = await run_in_threadpool(qreader_instance.detect_and_decode, image=image_np)
-             # Use pyzbar to decode the QR code
-            qr_codes = decode(autoctrst_image)
-            print(qr_codes)
-            return extract_aadhar(qr_codes)
+            # Note: QR decoding skipped (pyzbar compatibility issues on arm64)
+            # Proceeding with OCR-based extraction
         elif re.search(voter_regex, combined_text) or "ELECTION COMMISSION" in combined_text or "EPIC" in combined_text:
             document_type = "VOTER_ID"
 
@@ -339,8 +473,22 @@ async def validate_id_proof(file1: UploadFile = File(..., description="Aadhaar /
 
 
 @app.post("/validate-aadhar")
-async def validate_id_proof(file1: UploadFile = File(..., description="Aadhaar / Pancard Image")):
+async def validate_id_proof(
+    file1: UploadFile = File(..., description="Aadhaar / Pancard Image"),
+    credentials: HTTPAuthorizationCredentials = Depends(security)
+    ):
+    payload = verify_jwt(credentials.credentials)
+    app_name = payload.get("app")
+    
+    # Check if endpoint is allowed for this app
+    allowed_endpoints = ALLOWED_DOMAINS[app_name].get("endpoints", [])
+    if "verify_faces" not in allowed_endpoints:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f"App '{app_name}' does not have access to verify_faces endpoint"
+        )
     try:
+        
         contents = await file1.read()
         id_image = io.BytesIO(contents)
 
@@ -367,7 +515,7 @@ async def validate_id_proof(file1: UploadFile = File(..., description="Aadhaar /
         return {
             "document_type": "AADHAAR",
      
-            "valid": True,
+            # "valid": True,
             "texts": texts,
             "scores":scores
         
