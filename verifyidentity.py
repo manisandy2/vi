@@ -1,4 +1,5 @@
-from fastapi import FastAPI, File, UploadFile, HTTPException,Depends,Header,Request,status
+from fastapi import FastAPI, File, UploadFile, HTTPException,Depends,Header,Request,status,Body
+from pydantic import BaseModel
 from fastapi.responses import JSONResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from deepface import DeepFace
@@ -35,7 +36,9 @@ print("GPU available:", gpu_available)
 # JWT Configuration
 JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY")
 ALGORITHM = os.getenv("JWT_ALGORITHM")
-TOKEN_EXPIRE_HOURS = 1
+TOKEN_EXPIRE_HOURS = int(os.getenv("JWT_TOKEN_EXPIRE_HOURS"))
+
+
 
 # Security Scheme
 security = HTTPBearer()
@@ -100,10 +103,16 @@ def verify_jwt(token: str, required_app: str = None):
     except JWTError as e:
         raise HTTPException(status_code=401, detail=f"Invalid or expired token: {str(e)}")
 
+class TokenRequest(BaseModel):
+    app_name: str
+
+
 @app.post("/auth/token")
 async def get_token(
-        request: Request,
-        app_name: Optional[str] = Header(None),
+        # request: Request,
+        # # app_name: Optional[str] = Header(None),
+        # app_name: Body = Header(None)
+        body: TokenRequest
      
 ):
     """
@@ -113,6 +122,8 @@ async def get_token(
     - appName: valid app name from allowed domains.
     
     """
+    app_name = body.app_name
+
     if not app_name:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
