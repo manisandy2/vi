@@ -522,8 +522,10 @@ async def validate_id_proof(
 origins = [
     "https://www.poorvika.com",
     "https://www.poorvika.in",
-    # "http://localhost:3000",   # Local development
-    # "http://127.0.0.1:8000"
+    "https://poorvika.org",
+    "https://e2e-stage.poorvika.com",
+
+
 ]
 
 app.add_middleware(
