@@ -23,7 +23,7 @@ from pyaadhaar.decode import AadhaarSecureQr,AadhaarOldQr,AadhaarQRXML
 import xml.dom.minidom
 import xml.etree.ElementTree as ET
 from starlette.concurrency import run_in_threadpool # Import run_in_threadpool
-
+from fastapi.middleware.cors import CORSMiddleware
 
 # Load environment variables from .env file
 load_dotenv()
@@ -45,19 +45,19 @@ security = HTTPBearer()
 
 
 # Allowed Apps & Domains Authentication
-ALLOWED_DOMAINS = {
-    "ADMIN": {
-        "domain": ["www.poorvika.com","www.poorvika.in"],
-        "description": "CRM Application",
-        "endpoints": ["verify_faces", "validate-id", "validate-aadhar"]
-    },
-    # "ADMIN": {
-    #     "domain": ["admin.poorvika.com"],
-    #     "description": "Admin Application",
-    #     "endpoints": ["validate-aadhar"]
-    # },
-}
-# Initialize PaddleOCR once
+# ALLOWED_DOMAINS = {
+#     "ADMIN": {
+#         "domain": ["www.poorvika.com","www.poorvika.in"],
+#         "description": "CRM Application",
+#         "endpoints": ["verify_faces", "validate-id", "validate-aadhar"]
+#     },
+#     # "ADMIN": {
+#     #     "domain": ["admin.poorvika.com"],
+#     #     "description": "Admin Application",
+#     #     "endpoints": ["validate-aadhar"]
+#     # },
+# }
+# # Initialize PaddleOCR once
 
 ocr_engine = PaddleOCR(use_angle_cls=True, lang='en')
 
@@ -84,24 +84,12 @@ def verify_jwt(token: str, required_app: str = None):
     """Verify JWT token and validate app name and domain"""
     try:
         payload = jwt.decode(token, JWT_SECRET_KEY, algorithms=[ALGORITHM])
-        app_name = payload.get("app")
-        
-        
-        # Validate app name exists in allowed domains
-        if app_name not in ALLOWED_DOMAINS:
-            raise HTTPException(status_code=401, detail=f"Invalid app: {app_name}")
-        
-        # If specific app required, validate it matches
-        if required_app and app_name != required_app:
-            raise HTTPException(status_code=403, detail=f"Access denied. Required app: {required_app}")
-        
-        # Validate domain matches
-        expected_domain = ALLOWED_DOMAINS[app_name].get("domain")
-        
-        
+ 
+        if payload.get("app") != "ADMIN":
+            raise HTTPException(status_code=401, detail="Invalid appName in token")
         return payload
-    except JWTError as e:
-        raise HTTPException(status_code=401, detail=f"Invalid or expired token: {str(e)}")
+    except JWTError:
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
 
 class TokenRequest(BaseModel):
     app_name: str
@@ -127,21 +115,17 @@ async def get_token(
     if not app_name:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Missing 'appName' header. Allowed values: Valid app names."
+            detail="Missing 'app_name' header"
         )
 
-    # Validate app_name is in allowed domains
-    if app_name not in ALLOWED_DOMAINS:
+    if app_name != "ADMIN":
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            # detail=f"Invalid appName: {app_name}. Allowed: {list(ALLOWED_DOMAINS.keys())}"
-            detail=f"Invalid appName: {app_name}."
-        )
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Invalid 'app_name' header"
+    )
 
     try:
-        # Use provided domain or get from config
-        
-        token = create_jwt(app_name)
+        token = create_jwt(app_name)  # Your JWT creation logic
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -150,12 +134,11 @@ async def get_token(
 
     return JSONResponse(
         content={
-            "status": "success",
             "access_token": token,
             "token_type": "bearer",
-            "expires_in": TOKEN_EXPIRE_HOURS * 3600,
-            "status_code": 200  
+            "expires_in": TOKEN_EXPIRE_HOURS * 3600
         },
+        status_code=status.HTTP_200_OK
     )
 
 
@@ -175,16 +158,15 @@ async def verify_faces(
     Returns a dictionary with verification results from DeepFace.
     """
     # Verify JWT and check endpoint access
-    payload = verify_jwt(credentials.credentials)
-    app_name = payload.get("app")
-    
-    # Check if endpoint is allowed for this app
-    allowed_endpoints = ALLOWED_DOMAINS[app_name].get("endpoints", [])
-    if "verify_faces" not in allowed_endpoints:
+    # Verify JWT and check endpoint access
+    try:
+        verify_jwt(credentials.credentials)
+    except Exception as e:
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail=f"App '{app_name}' does not have access to verify_faces endpoint"
+            status_code=401,
+            detail=f"Invalid token: {str(e)}"
         )
+    
     
     from deepface import DeepFace
 
@@ -488,16 +470,14 @@ async def validate_id_proof(
     file1: UploadFile = File(..., description="Aadhaar / Pancard Image"),
     credentials: HTTPAuthorizationCredentials = Depends(security)
     ):
-    payload = verify_jwt(credentials.credentials)
-    app_name = payload.get("app")
-    
-    # Check if endpoint is allowed for this app
-    allowed_endpoints = ALLOWED_DOMAINS[app_name].get("endpoints", [])
-    if "verify_faces" not in allowed_endpoints:
+    try:
+        verify_jwt(credentials.credentials)
+    except Exception as e:
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail=f"App '{app_name}' does not have access to verify_faces endpoint"
+            status_code=401,
+            detail=f"Invalid token: {str(e)}"
         )
+    
     try:
         
         contents = await file1.read()
@@ -535,6 +515,24 @@ async def validate_id_proof(
     except Exception as e:
         return {"status": "error", "message": str(e)}
 
+
+# CORS Middleware Configuration
+
+
+origins = [
+    "https://www.poorvika.com",
+    "https://www.poorvika.in",
+    # "http://localhost:3000",   # Local development
+    # "http://127.0.0.1:8000"
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["GET", "POST", "PUT", "DELETE"],
+    allow_headers=["Authorization", "Content-Type"],
+)
 
 if __name__ == "__main__":
     import uvicorn
