@@ -519,22 +519,22 @@ async def validate_id_proof(
 # CORS Middleware Configuration
 
 
-origins = [
-    "https://www.poorvika.com",
-    "https://www.poorvika.in",
-    "https://poorvika.org",
-    "https://e2e-stage.poorvika.com",
+# origins = [
+#     "https://www.poorvika.com",
+#     "https://www.poorvika.in",
+#     "https://poorvika.org",
+#     "https://e2e-stage.poorvika.com",
 
 
-]
+# ]
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=origins,
-    allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "DELETE"],
-    allow_headers=["Authorization", "Content-Type"],
-)
+# app.add_middleware(
+#     CORSMiddleware,
+#     allow_origins=origins,
+#     allow_credentials=True,
+#     allow_methods=["GET", "POST", "PUT", "DELETE"],
+#     allow_headers=["Authorization", "Content-Type"],
+# )
 
 if __name__ == "__main__":
     import uvicorn
